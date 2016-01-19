@@ -1,6 +1,9 @@
 ## Author: Wilmar van Ommeren
-## Date: November 2015
-# to do: remove weed from analysis
+## Date: Januari 2016
+
+######################################################################################################################
+# STEP 1: PREPARE SCRIPT #############################################################################################
+######################################################################################################################
 
 ## Set working directory
 setwd('E:/Mijn documenten/Wageningen/Thesis/Scripts')
@@ -14,147 +17,331 @@ if (!require(dismo)){install.packages("dismo")}
 if (!require(class)){install.packages("class")}
 if (!require(caret)){install.packages("caret")}
 
-if (!require(rpart)){install.packages("rpart")}
-if (!require(rpart.plot)){install.packages("rpart.plot")}
-if (!require(SDMTools)){install.packages("SDMTools")}
-if (!require(dtw)){install.packages("dtw")}
-if (!require(Morpho)){install.packages("Morpho")}
-
 ## Load source scripts
 source('./R/align.rasters.R')
-source('./R/overlay.function.R')
-source('./R/training.statistics.field.R')
-source('./R/training.statistics.crop.R')
+source('./R/rescale.rasters.R')
+source('./R/overlay.function.list.R')
+source('./R/overlay.function.checkfile.R')
 source('./R/vegetation.index.type1.R')
 source('./R/vegetation.index.type2.R')
 source('./R/bare.soil.mask.creation.R')
+source('./R/training.statistics.field.R')
+source('./R/training.statistics.crop.R')
 source('./R/mean.index.profiles.R')
-source('./R/dynamic.time.warping.R')
-source('./R/rescale.rasters.R')
+source('./R/singlemask.R')
+source('./R/create.train.test.R')
+source('./R/create.random.points.R')
+source('./R/round.to.first.uneven.R')
 
+######################################################################################################################
+# STEP 2: LOAD OR PREPARE DATA #######################################################################################
+######################################################################################################################
 
-## Set flight height (my flights are at 35,)20151015_180m_mask_align
-fheight <-'Sougoumba2014'
+## Set ID with which rasters will be loaded and saved
+id <-'Sougoumba2014'
 
 ## Align or load rasters
-names <- substr(list.files('./Input/Sougoumba/2014mask',pattern='*Sougoumba2014.tif'),1,8)
-inputrasterpaths <- list.files('./Input/Sougoumba/2014mask',pattern='*Sougoumba2014.tif',full.names=T)
-outputrasterspaths <- paste('./Input/Sougoumba/radio_',fheight,'_',names,'.tif',sep='')
+dates <- substr(list.files('./Input/Sougoumba/SYNCED',pattern='*_output.tif$'),1,8)
+inputrasterpaths <- list.files('./Input/Sougoumba/SYNCED',pattern='*_output.tif$',full.names=T)
+outputrasterspaths <- paste('./Input/Sougoumba/radio_',id,'_',dates,'.tif',sep='')
 referencerasterpath <- inputrasterpaths[1]
-
 alignlist <- align.rasters (referencerasterpath, inputrasterpaths, outputrasterspaths)
 
-## Rescale rasters
-outputrasterspaths <- paste('./Output/rescaled_',names,'_',fheight,'.tif',sep='')
-rescalelist<-rescale.rasters(alignlist,outputrasterspaths)
+## Rescale rasters between 0 and 1
+rescalefactor <- 10000
+outputrasterspaths <- paste('./Input/rescaled_',id,'_',dates,'.tif',sep='')
+rescalelist<-rescale.rasters(alignlist,outputrasterspaths,rescalefactor)
 
 ## Calculate vegetation indexes
 NIR<-4 #x
 RED<-3 #y
+outputfolder <- './Output/'
 NDVI <- function(x,y){(x-y)/(x+y)}
-NDVIbrick <-vegetation.index.type1(rescalelist,NDVI,'ndvi',fheight,NIR,RED)
+NDVIbrick <-vegetation.index.type1(rescalelist,NDVI,'ndvi',id,NIR,RED,outputfolder)
 
 SAVI <- function(x,y){((x-y)/(x+y+0.5))*(1+0.5)} #L<- 0.5
-SAVIbrick<-vegetation.index.type1(rescalelist,SAVI,'savi',fheight,NIR,RED)
+SAVIbrick<-vegetation.index.type1(rescalelist,SAVI,'savi',id,NIR,RED,outputfolder)
 
 interval <- 0.005
 Xfactor <- 0.08
 TSAVI <- function(x,y){(s*(x-s*y-a))/(a*x+y-a*s+Xfactor*(1+s^2))}
-TSAVIbrick<-vegetation.index.type2(rescalelist,TSAVI,'tsavi',fheight,NIR,RED,interval)
+TSAVIbrick<-vegetation.index.type2(rescalelist,TSAVI,'tsavi',id,NIR,RED,interval,outputfolder)
 
 PVI <- function (x,y){(1/sqrt(1+s^2))*(x-s*y-a)}#http://naldc.nal.usda.gov/download/9394/PDF
-PVIbrick<-vegetation.index.type2(rescalelist,PVI,'pvi',fheight,NIR,RED,interval)
+PVIbrick<-vegetation.index.type2(rescalelist,PVI,'pvi',id,NIR,RED,interval,outputfolder)
 
 WDVI <- function (x,y){x-s*y} #C = NIR soil ref/red soil ref == slope
-WDVIbrick<-vegetation.index.type2(rescalelist,WDVI,'wdvi',fheight,NIR,RED,interval)
+WDVIbrick<-vegetation.index.type2(rescalelist,WDVI,'wdvi',id,NIR,RED,interval,outputfolder)
+
+######################################################################################################################
+# STEP 3: PREPARE FOR CLASSIFICATION #################################################################################
+######################################################################################################################
+
+## Select the index to be used in the analysis
+index<-PVIbrick
+indexname<-'PVI'
 
 ## Remove bare soil
 NDVIbare_value <- 0.2
-bare.soil.mask <-bare.soil.mask.creation(fheight,NDVIbrick,NDVIbare_value)
-NDVIbrick <-overlay(NDVIbrick,bare.soil.mask,fun=function(x,y)ifelse(y==1,x,NA),filename=paste('./Output/ndvi',fheight,'bare.tif',sep=''))
-WDVIbrick<-overlay(WDVIbrick,bare.soil.mask,fun=function(x,y)ifelse(y==1,x,NA),filename=paste('./Output/wdvi',fheight,'bare.tif',sep=''))
-PVIbrick<-overlay(PVIbrick,bare.soil.mask,fun=function(x,y)ifelse(y==1,x,NA),filename=paste('./Output/pvi',fheight,'bare.tif',sep=''))
-SAVIbrick<-overlay(SAVIbrick,bare.soil.mask,fun=function(x,y)ifelse(y==1,x,NA),filename=paste('./Output/savi',fheight,'bare.tif',sep=''))
-TSAVIbrick<-overlay(TSAVIbrick,bare.soil.mask,fun=function(x,y)ifelse(y==1,x,NA),filename=paste('./Output/tsavi',fheight,'bare.tif',sep=''))
+bare.soil.mask <-bare.soil.mask.creation(id,NDVIbrick,NDVIbare_value,outputfolder)
 
-## Calculate mean index profiels per training area and per crop type
-trainingareas <- shapefile('./Input/Sougoumba/Samanko2014_fields90perc.shp') 
-colnames<-trainingareas$Crop_type
-NDVIprofilelist <- mean.index.profiles(NDVIbrick,'ndvi',fheight,trainingareas,colnames,names)
-NDVIprofile_field <- NDVIprofilelist[[1]]
-NDVIprofile_crop <- NDVIprofilelist[[2]]
+# Remove bare from index
+INDEXbare<-overlay.function.checkfile(index, bare.soil.mask,function(x,y)ifelse(y==1,x,NA),outputfolder,paste(indexname,id,'bare.tif',sep=''))
 
-SAVIprofilelist <- mean.index.profiles(SAVIbrick,'savi',fheight,trainingareas,colnames,names)
-SAVIprofile_field <- SAVIprofilelist[[1]]
-SAVIprofile_crop <- SAVIprofilelist[[2]]
+# Calculate mean index profiels per training area and per crop type
+trainingareas <- shapefile('./Input/Sougoumba/Sougoumba2014fields90perc.shp') 
+crop_types<-trainingareas$Crop_type
 
-TSAVIprofilelist <- mean.index.profiles(TSAVIbrick,'tsavi',fheight,trainingareas,colnames,names)
-TSAVIprofile_field <- TSAVIprofilelist[[1]]
-TSAVIprofile_crop <- TSAVIprofilelist[[2]]
+INDEXprofilelist <- mean.index.profiles(INDEXbare,indexname,id,trainingareas,crop_types,dates,outputfolder)
+INDEXprofile_field <- INDEXprofilelist[[1]]
+INDEXprofile_crop <- INDEXprofilelist[[2]]
 
-PVIprofilelist <- mean.index.profiles(PVIbrick,'pvi',fheight,trainingareas,colnames,names)
-PVIprofile_field <- PVIprofilelist[[1]]
-PVIprofile_crop <- PVIprofilelist[[2]]
+## Remove trees from raster
+treemask <- raster('./Input/Sougoumba/sougoumba2014treemask.tif')
+INDEXtree<-overlay.function.checkfile(index, treemask,function(x,y)ifelse(y==1,NA,x),outputfolder,filename=paste('PVI',id,'_tree.tif',sep=''))
 
-WDVIprofilelist <- mean.index.profiles(WDVIbrick,'wdvi',fheight,trainingareas,colnames,names)
-WDVIprofile_field <- WDVIprofilelist[[1]]
-WDVIprofile_crop <- WDVIprofilelist[[2]]
+## Aggregate raster
+INDEXtreeagg<-aggregate(INDEXtree, fact=4,fun=max)
+PVIbrick4<-aggregate(PVIbrick, fact=4,fun=mean)
+
+######################################################################################################################
+# STEP 4: CLASSIFICATION WITHOUT STRATA ##############################################################################
+######################################################################################################################
 
 ## Create 100 random points per crop type
-# Select raster cells that do not have NA values in their time series
-bare.soil.withoutNA<-raster::as.matrix(bare.soil.mask)
-row.has.na <- apply(bare.soil.withoutNA, 1, function(x){any(is.na(x))})
-row.has.na<-ifelse(row.has.na,NA,1)
-bare.soil.withoutNA<-setValues(bare.soil.mask[[1]],row.has.na)
-trainingareas<-spTransform(trainingareas,CRS(projection(bare.soil.mask)))
-
-TRAININGcotton <-SpatialPointsDataFrame(SpatialPoints(randomPoints(mask(bare.soil.withoutNA[[1]],subset(trainingareas,Crop_type=='Cotton')),100),CRS(projection(trainingareas))),data=data.frame(rep('cotton',100),rep(1,100)))
-names(TRAININGcotton)<-c('Crop','CropNO')
-TRAININGmillet <-SpatialPointsDataFrame(SpatialPoints(randomPoints(mask(bare.soil.withoutNA[[1]],subset(trainingareas,Crop_type=='Millet')),100),CRS(projection(trainingareas))),data=data.frame(rep('millet',100),rep(2,100)))
-names(TRAININGmillet)<-c('Crop','CropNO')
-TRAININGsorghum <-SpatialPointsDataFrame(SpatialPoints(randomPoints(mask(bare.soil.withoutNA[[1]],subset(trainingareas,Crop_type=='Sorghum')),100),CRS(projection(trainingareas))),data=data.frame(rep('sorghum',100),rep(3,100)))
-names(TRAININGsorghum)<-c('Crop','CropNO')
-TRAININGmaize <- SpatialPointsDataFrame(SpatialPoints(randomPoints(mask(bare.soil.withoutNA[[1]],subset(trainingareas,Crop_type=='Maize')),100),CRS(projection(trainingareas))),data=data.frame(rep('maize',100),rep(5,100)))
-names(TRAININGmaize)<-c('Crop','CropNO')
-TRAININGpeanut <- SpatialPointsDataFrame(SpatialPoints(randomPoints(mask(bare.soil.withoutNA[[1]],subset(trainingareas,Crop_type=='Peanut')),100),CRS(projection(trainingareas))),data=data.frame(rep('peanut',100),rep(6,100)))
-names(TRAININGpeanut)<-c('Crop','CropNO')
-
-## Create random points
+# peanut = 6; maize = 5; cotton = 1; sorghum = 3; millet = 2
 set.seed(123123)
-trainset<-sample(seq(1,100,1),0.8*100)
-shapefile(TRAININGpeanut[trainset,],paste('./Input/PeanutsPointsTrain_',fheight,'.shp',sep=''))
-shapefile(TRAININGpeanut[-trainset,],paste('./Input/PeanutsPointsTest_',fheight,'.shp',sep=''))
-shapefile(TRAININGmaize[trainset,],paste('./Input/MaizePointsTrain_',fheight,'.shp',sep=''))
-shapefile(TRAININGmaize[-trainset,],paste('./Input/MaizePointsTest_',fheight,'.shp',sep=''))
-shapefile(TRAININGcotton[trainset,],paste('./Input/CottonPointsTrain_',fheight,'.shp',sep=''))
-shapefile(TRAININGcotton[-trainset,],paste('./Input/CottonPointsTest_',fheight,'.shp',sep=''))
-shapefile(TRAININGsorghum[trainset,],paste('./Input/SorghumPointsTrain_',fheight,'.shp',sep=''))
-shapefile(TRAININGsorghum[-trainset,],paste('./Input/SorghumPointsTest_',fheight,'.shp',sep=''))
-shapefile(TRAININGmillet[trainset,],paste('./Input/MilletPointsTrain_',fheight,'.shp',sep=''))
-shapefile(TRAININGmillet[-trainset,],paste('./Input/MilletPointsTest_',fheight,'.shp',sep=''))
+crop_types<-unique(trainingareas$Crop_type)
+crop_column_no <- 3
+crop_numbers<-c(6,3,2,5,1)
+samplesize<-100
+trainingportion<-0.8
+randompointsraster<-INDEXtree
+classificationraster<-PVIbrick4
 
-## KNN classification
-TRAININGpoints <-rbind(shapefile(paste('./Input/MaizePointsTrain_',fheight,'.shp',sep='')),
-                       shapefile(paste('./Input/PeanutsPointsTrain_',fheight,'.shp',sep='')),
-                       shapefile(paste('./Input/CottonPointsTrain_',fheight,'.shp',sep='')),
-                       shapefile(paste('./Input/SorghumPointsTrain_',fheight,'.shp',sep='')),
-                       shapefile(paste('./Input/MilletPointsTrain_',fheight,'.shp',sep='')))
-TESTpoints <-rbind(shapefile(paste('./Input/MaizePointsTest_',fheight,'.shp',sep='')),
-                   shapefile(paste('./Input/PeanutsPointsTest_',fheight,'.shp',sep='')),
-                   shapefile(paste('./Input/CottonPointsTest_',fheight,'.shp',sep='')),
-                   shapefile(paste('./Input/SorghumPointsTest_',fheight,'.shp',sep='')),
-                   shapefile(paste('./Input/MilletPointsTest_',fheight,'.shp',sep='')))
+randompoints<-create.train.test(trainingareas,randompointsraster,crop_types,crop_column_no,crop_numbers,samplesize,trainingportion)
+TRAINpoints<-randompoints[[1]]
+TESTpoints<-randompoints[[2]]
 
-index <- PVIbrick
-TRAIN <- data.frame(extract(index,TRAININGpoints),TRAININGpoints$Crop)
-TEST <- data.frame(extract(index,TESTpoints),TESTpoints$Crop)
+## KNN classification without strata
+kvalue<- round.to.first.uneven(length(TRAINpoints[[1]]))
+TRAIN <- data.frame(extract(classificationraster,TRAINpoints),TRAINpoints$Crop)
+TEST <- data.frame(extract(classificationraster,TESTpoints),TESTpoints$Crop)
 TRAINtarget<-TRAIN[,length(TRAIN[1,])]
 TESTtarget<-TEST[,length(TRAIN[1,])]
 
-prd_test_pred<-knn(train=TRAIN[,1:12],test=TEST[,1:12],cl=TRAINtarget,k=21)
+KNNclassification<-knn(train=TRAIN[,1:length(TRAIN)-1],test=TEST[,1:length(TEST)-1],cl=TRAINtarget,k=kvalue)
+confusionMatrix(KNNclassification,TESTtarget)
 
-## Accuracy check
-confusionMatrix(prd_test_pred,TESTtarget)
+######################################################################################################################
+# STEP 5: CLASSIFICATION WITH STRATA #################################################################################
+######################################################################################################################
+
+# Random points per strata per crop type
+# peanut = 6; maize = 5; cotton = 1; sorghum = 3; millet = 2
+set.seed(123123)
+crop_types<-unique(trainingareas$Crop_type)[2:5]
+crop_column_no <- 3
+crop_numbers<-c(3,2,5,1)
+samplesize<-100
+trainingportion<-0.8
+strata<-spTransform(rasterToPolygons(raster('./Input/Sougoumba/Sougoumba_height_iso.tif'),dissolve=T),CRS(projection(trainingareas)))
+randompointsraster<-INDEXtree
+classificationraster<-PVIbrick4
+return.raster=T
+
+knn.with.strata<-function(trainingareas,randompointsraster,classificationraster,crop_types,crop_column_no,crop_numbers,samplesize,trainingportion){
+  kvaluelist<<-list()
+  trainlist<<-list()
+  testlist<<-list()
+  traintargetlist<<-list()
+  for (i in 1:length(strata)){
+    print (paste('Strata:',i))
+    
+    # Create points per strata
+    trainingstrata<-intersect(trainingareas,subset(strata,get(names(strata))==i))
+    randompoints<-create.train.test(trainingstrata,randompointsraster,crop_types,crop_column_no,crop_numbers,samplesize,trainingportion)
+    TRAINpoints<-randompoints[[1]]
+    TESTpoints<-randompoints[[2]]
+    
+    # Calculate optimal k-value
+    kvalue<- round.to.first.uneven(length(randompoints[[1]]))
+    print(paste('K-value: ',kvalue))
+    kvaluelist[i]<-kvalue
+    
+    # Extract values per random point
+    TRAIN <- data.frame(extract(classificationraster,TRAINpoints),TRAINpoints$Crop)
+    TEST <- data.frame(extract(classificationraster,TESTpoints),TESTpoints$Crop)
+    TRAINtarget<-TRAIN[,length(TRAIN[1,])]
+    TESTtarget<-TEST[,length(TRAIN[1,])]
+    
+    if (i==1){
+      traintargetlist <<- lapply('TRAINtarget', get)
+      testlist <<- lapply('TEST', get)
+      trainlist <<- lapply('TRAIN', get)
+    } else {
+      traintargetlist[[i]]<<-TRAINtarget
+      testlist[[i]]<<-TEST
+      trainlist[[i]]<<-TRAIN
+    }
+    
+    # Classification and result
+    KNNclassification<-knn(train=TRAIN[,1:length(TRAIN)-1],test=TEST[,1:length(TEST)-1],cl=TRAINtarget,k=kvalue)
+    print(confusionMatrix(KNNclassification,TESTtarget))
+  }
+  
+  # Create raster is return.raster = TRUE
+  if (return.raster){
+    print('Creating classified raster...')
+    masklist <<- list()
+    mask.dflist<<-list()
+    mask.dfwithoutNA<<-list()
+    combined.dflist<<-list()
+    rasterlist<-list()
+    for (j in 1:length(strata)){
+      # Create raster mask per strata
+      print(paste('Step 1: Splitting index raster into different strata [',j,'/',length(strata),']',sep=''))
+      masklist[j]<<-mask(index,subset(strata,get(names(strata))==j))
+      
+      # Convert raster to dataframe
+      print(paste('Step 2: Transforming strata to dataframe for calculations [',j,'/',length(strata),']',sep=''))
+      mask.df<<-as.data.frame(raster::as.matrix(masklist[[j]]))
+      
+      if (j==1){
+        mask.dflist <<- lapply('mask.df', get)
+      } else {
+        mask.dflist[[j]]<<-mask.df
+      }
+      
+      # Create per dataframe a new column with the row numbers
+      print(paste('Step 3: Creating a new column with row numbers [',j,'/',length(strata),']',sep=''))
+      mask.dflist[[j]]['rowno']<<-matrix(seq(from=1,to=nrow(mask.dflist[[j]]),by=1),ncol=1)
+      
+      # Remove NAs from dataframe
+      print(paste('Step 4: Removing NAs from dataframe [',j,'/',length(strata),']',sep=''))
+      mask.na.df<<-na.omit(mask.dflist[[j]])
+      if (j==1){
+        mask.dfwithoutNA <<- lapply('mask.na.df', get)
+      } else {
+        mask.dfwithoutNA[[j]]<<-mask.na.df
+      }
+      
+      # Add column with KNN klassification
+      print(paste('Step 5: KNN classification on dataframe without NAs [',j,'/',length(strata),']',sep=''))
+      mask.dfwithoutNA[[j]]['KNN']<<-knn(train=trainlist[[j]][,1:length(trainlist[[j]])-1],test=mask.dfwithoutNA[[j]][,1:length(mask.dfwithoutNA[[j]])-1],cl=traintargetlist[[j]],k=kvaluelist[[j]])
+      
+      # Merge classified dataframe without NAs with the dataframe containing all row numbers
+      print(paste('Step 6: Merging dataframes with and without NAs on row numbers [',j,'/',length(strata),']',sep=''))
+      combined.df<<-merge(mask.dflist[[j]],mask.dfwithoutNA[[j]],by='rowno',all=T)
+      
+      if (j==1){
+        combined.dflist <<- lapply('combined.df', get)
+      } else {
+        combined.dflist[[j]]<<-combined.df
+      }
+    }
+  }
+}
+
+
+combined.dflist[[1]]
+
+knn.with.strata(trainingareas,randompointsraster,classificationraster,crop_types,crop_column_no,crop_numbers,samplesize,trainingportion)
+
+
+
+names(trainlist[[1]][1:11])
+names(mask.dfwithoutNA[[1]])
+knn(train=trainlist[[j]][,1:length(trainlist[[j]])-1],test=mask.dfwithoutNA[[j]][,1:length(trainlist[[j]])-2],cl=traintargetlist[j],k=kvaluelist[j])
+
+knn(train=trainlist[[1]][,1:length(trainlist[[1]])-1],test=mask.dfwithoutNA[[1]][,1:length(mask.dfwithoutNA[[1]])],cl=traintargetlist[[1]],k=21)
+
+a<-trainlist[[1]][,1:length(trainlist[[1]])-1]
+b<-traintargetlist[[1]]
+
+length(b)
+
+na.omit(mask.dflist[[2]])
+kvaluelist
+head(mask.dfwithoutNA[[1]])
+head(trainlist[[1]][,1:length(trainlist[[1]])-1])
+traintargetlist
+mask.dfwithoutNA
+
+ncol(trainlist[1])
+mask.df<-as.data.frame(raster::as.matrix(masklist[[j]]))
+
+a<-data.frame(c(1,2,3,4,5),c(45,NA,NA,43,21))
+names(a)<-c('a','b')
+c<-na.omit(a)
+c[3]<-c('d','d','d')
+nrow(a)
+a['rowno']<-2
+a
+c
+trainlist[[1]]['rowno']<-1
+merge(a,c,by=1,all=T)
+
+?merge
+a
+
+trainlist[[2]]<-TRAIN
+
+mask1MAT[,13]<-NA
+for (i in 1:length(mask1NA[,1])){
+  print(paste(i,'/',length(mask1NA[,1])))
+  rowno<-mask1NA[,12][i]
+  mask1MAT[,13][rowno]<-toString(mask1NA[,13][i])
+}
+# peanut = 6; maize = 5; cotton = 1; sorghum = 3; millet = 2
+
+combinedMAT<-mask1MAT[,c(12,13)]
+
+for (i in 1:length(combinedMAT[,1])){
+  print(paste(i,'/',length(combinedMAT[,1])))
+  if (!is.na(mask1MAT[,13][i])){
+    combinedMAT[,1][i]<-mask1MAT[,13][i]
+    if (mask1MAT[,13][i]=="Sorghum"){
+      combinedMAT[,2][i]<-3
+    } else if (mask1MAT[,13][i]=="Millet"){
+      combinedMAT[,2][i]<-2
+    } else if (mask1MAT[,13][i]=="Maize"){
+      combinedMAT[,2][i]<-5
+    }else if (mask1MAT[,13][i]=="Cotton" ){
+      combinedMAT[,2][i]<-1
+    }
+  } else if (!is.na(mask2MAT[,13][i])){
+    combinedMAT[,1][i]<-mask2MAT[,13][i]
+    if (mask2MAT[,13][i]=="Sorghum"){
+      combinedMAT[,2][i]<-3
+    } else if (mask2MAT[,13][i]=="Millet"){
+      combinedMAT[,2][i]<-2
+    } else if (mask2MAT[,13][i]=="Maize"){
+      combinedMAT[,2][i]<-5
+    }else if (mask2MAT[,13][i]=="Cotton" ){
+      combinedMAT[,2][i]<-1
+    }
+  } else {
+    combinedMAT[,1][i]<-NA
+  }
+}
+unique(mask1MAT[,13])
+
+
+combinedMAT[,1]<-emptylist
+
+setValues(training2)
+mask2[[12]]<-setValues(mask2[[11]],as.numeric(combinedMAT[,2]))
+ncell(mask2)
+length(mask2NA[,13])
+plot(mask2[[12]])
+plot(trainingareas,add=T)
+
+writeRaster(mask2[[12]],'PVI_factor4_class.tif')
+
+
+
+
 
 ## Stratification sougoumba
 # Soil
@@ -354,13 +541,13 @@ confusionMatrix(prd_test_pred,TESTtarget)
 ## Accuracy check
 indexname<-'savi'
 foldername<-'./Output/Classification'
-filenames<-list.files(foldername,paste('*',indexname,fheight,'*',sep=''),full.names=T)
+filedates<-list.files(foldername,paste('*',indexname,id,'*',sep=''),full.names=T)
 
 #remove values bigger than 4 or smaller than 1
 accuracylist<-list()
-for (i in 1:length(filenames)){
-  print(filenames[i])
-  CLASSrast<-calc(raster(filenames[i]),function(x) { x[x<1] <- NA; return(x) })
+for (i in 1:length(filedates)){
+  print(filedates[i])
+  CLASSrast<-calc(raster(filedates[i]),function(x) { x[x<1] <- NA; return(x) })
   resultpoints<-extract(CLASSrast,TESTpoints)
   print((confusionMatrix(resultpoints,TESTpoints@data$CropNO)))
 }
@@ -375,14 +562,14 @@ for(i in 1:length(folders)){
 
 for (i in 1:length(rasterlist)){
   print(i)
-  writeRaster(crop(rasterlist[[i]],shapefile('./Input/Sougoumba/studyarea.shp')),paste(names[i],'SOU2014.tif',sep=''))
+  writeRaster(crop(rasterlist[[i]],shapefile('./Input/Sougoumba/studyarea.shp')),paste(dates[i],'SOU2014.tif',sep=''))
 }
 
 
 
-names <- substr(list.files('./Input/Sougoumba/2014',full.names=T),24,31)
-inputrasterpaths <- paste('./Input/radio_',fheight,'_',names,'.tif',sep='')
-outputrasterspaths <- paste('./Input/radio_',fheight,'_',names,'.tif',sep='')
+dates <- substr(list.files('./Input/Sougoumba/2014',full.names=T),24,31)
+inputrasterpaths <- paste('./Input/radio_',id,'_',dates,'.tif',sep='')
+outputrasterspaths <- paste('./Input/radio_',id,'_',dates,'.tif',sep='')
 referencerasterpath <- inputrasterpaths[6]
 
 
@@ -419,13 +606,13 @@ length(TEST[,1])
 ## Accuracy check
 indexname<-'spect180'
 foldername<-'./AccuracyPoints'
-filenames<-list.files(foldername,paste('*',indexname,'*',sep=''),full.names=T)
+filedates<-list.files(foldername,paste('*',indexname,'*',sep=''),full.names=T)
 testpoints<-shapefile('./Input/TestPointsCombined.shp')
-filenames
+filedates
 accuracylist<-list()
-for (i in 1:length(filenames)){
-  print(filenames[i])
-  resultpoints<-extract(raster(filenames[i]),testpoints)
+for (i in 1:length(filedates)){
+  print(filedates[i])
+  resultpoints<-extract(raster(filedates[i]),testpoints)
   print((confusionMatrix(resultpoints,testpoints@data$CropNo)))
 
 }
@@ -595,7 +782,7 @@ slopefun <- function(x) {if (is.na(x[1])) { NA } else {lm(x ~ time)$coefficients
 NDVIslope <- calc(NDVIbrick, fun)
 
 # calculate dynamic time warping distance per crop type and per cell
-NDVIdtw.brick<-dynamic.time.warping(NDVIprofile_crop, NDVIbrick, 'ndvi', fheight)
+NDVIdtw.brick<-dynamic.time.warping(NDVIprofile_crop, NDVIbrick, 'ndvi', id)
 
 classification <- dtw.brick[[1]]
 class.data <- raster::as.matrix(dtw.brick)
@@ -641,7 +828,7 @@ spplot(a)
 #################
 dates<-c()
 for (i in 1:NDVI_VEGbrick@file@nbands){
-  year_monthday <- sub( '(?<=.{4})', '-', names[i], perl=TRUE)
+  year_monthday <- sub( '(?<=.{4})', '-', dates[i], perl=TRUE)
   dates[i] <- sub( '(?<=.{7})', '-', year_monthday, perl=TRUE)
 }
 NDVIseries<- rts(NDVI_VEGbrick,dates)
@@ -685,7 +872,7 @@ theta <- acos( sum(a*c) / ( sqrt(sum(a * a)) * sqrt(sum(c * c)) ) )
 
 lm(a)
 
-z<-dtw(a,b,keep.internals=T,step.pattern=typeIds)
+z<-dtw(a,b,keep.internals=T,step.pattern=typeIds)TRAINpointslist
 z$distance
 z$costMatrix
 
