@@ -17,7 +17,7 @@
 # are in the table called: accuracy.output. For each strata there ar 5 columns: K-value, overall accuracy, users accuracy,
 # producers accuracy & kappa. The first strata results are in the first 5 columns, second in the next 5, etc.
 
-knn.with.strata<-function(trainingareas,strata,randompointsraster,classificationraster,crop_types,crop_column_no,crop_numbers,samplesize,trainingportion,return.raster){
+regrtree.with.strata<-function(trainingareas,strata,randompointsraster,classificationraster,crop_types,crop_column_no,crop_numbers,samplesize,trainingportion,return.raster){
   kvaluelist<<-list()
   trainlist<<-list()
   testlist<<-list()
@@ -56,10 +56,14 @@ knn.with.strata<-function(trainingareas,strata,randompointsraster,classification
       trainlist[[i]]<<-TRAIN
     }
     # Classification 
-    KNNclassification<-knn(train=TRAIN[,1:length(TRAIN)-1],test=TEST[,1:length(TEST)-1],cl=TRAINtarget,k=kvalue)
+    REGRTclassification<-rpart(formula=as.formula(paste(paste(names(TRAIN)[length(TRAIN)],'~'),paste(names(TRAIN)[1:length(TRAIN)-1],collapse='+'))), data=TRAIN,method='class')
+    
+    # Improve tree
+    bestcp <- REGRTclassification$cptable[which.min(REGRTclassification$cptable[,"xerror"]),"CP"]
+    REGRTclassification.pruned <- prune(REGRTclassification, cp = bestcp)
     
     # Accuracy assessment
-    accuracy.assess<-confusionMatrix(KNNclassification,TESTtarget)
+    accuracy.assess<-confusionMatrix(predict(REGRTclassification.pruned,newdata=TEST,type='class'),TEST[,length(TEST)])
     overall<-accuracy.assess$overall[1]
     kappa<-accuracy.assess$overall[2]
     accuracy.assess.table<<-as.data.frame.matrix(accuracy.assess$table)
@@ -85,9 +89,6 @@ knn.with.strata<-function(trainingareas,strata,randompointsraster,classification
     accuracy.output[rowno,(i*5-5)+3]<<-user
     accuracy.output[rowno,(i*5-5)+4]<<-kappa
     accuracy.output[rowno,(i*5-5)+5]<<-prod
-    
-    
-    
   }
   # Create raster is return.raster = TRUE
   if (return.raster){
@@ -109,9 +110,16 @@ knn.with.strata<-function(trainingareas,strata,randompointsraster,classification
       print(paste('Removing NAs from dataframe. Loop: ',j,'/',length(strata),sep=''))
       mask.na.df<<-na.omit(mask.df)
       
-      # Add column with KNN classification
-      print(paste('KNN classification on dataframe without NAs. Loop: ',j,'/',length(strata),sep=''))
-      mask.na.df['Crop']<<-knn(train=trainlist[[j]][,1:length(trainlist[[j]])-1],test=mask.na.df[,1:length(mask.na.df)-1],cl=traintargetlist[[j]],k=kvaluelist[[j]])
+      # Regression tree classification
+      print(paste('Regression tree classification on dataframe without NAs. Loop: ',j,'/',length(strata),sep=''))
+      REGRTclassification<-rpart(formula=as.formula(paste(paste(names(trainlist[[j]])[length(trainlist[[j]])],'~'),paste(names(trainlist[[j]])[1:length(trainlist[[j]])-1],collapse='+'))), data=trainlist[[j]],method='class')
+      
+      # Improve tree
+      bestcp <- REGRTclassification$cptable[which.min(REGRTclassification$cptable[,"xerror"]),"CP"]
+      REGRTclassification.pruned <- prune(REGRTclassification, cp = bestcp)
+      
+      # Add column with Regression tree classification
+      mask.na.df['Crop']<<-predict(REGRTclassification.pruned,newdata=mask.na.df[,1:length(mask.na.df)-1],type='class')
       
       # Create dataframe with classification result per strata
       print(paste('Creating dataframe with classification results per strata. Loop: ',j,'/',length(strata),sep=''))

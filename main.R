@@ -20,9 +20,7 @@ if (!require(dismo)){install.packages("dismo")}
 if (!require(class)){install.packages("class")}
 if (!require(caret)){install.packages("caret")}
 if (!require(e1071)){install.packages("e1071")}
-if (!require(rasterVis)){install.packages("rasterVis")}
-if (!require(RColorBrewer)){install.packages("RColorBrewer")}
-if (!require(GISTools)){install.packages("GISTools")}
+if (!require(rpart)){install.packages("rpart")}
 
 ## Load source scripts
 source('./R/align.rasters.R')
@@ -40,6 +38,7 @@ source('./R/create.train.test.R')
 source('./R/create.random.points.R')
 source('./R/round.to.first.uneven.R')
 source('./R/knn.with.strata.R')
+source('./R/regressiontree.with.strata.R')
 
 #######################################################################################################################
 # STEP 2: LOAD OR PREPARE DATA ########################################################################################
@@ -117,52 +116,53 @@ treemask <- shapefile('./Input/Sougoumba/2015/Ancillary Data/Sougoumba2015treema
 INDEXtree<-mask(INDEXbare,treemask,inverse=T)
 
 ## Aggregate raster
-PVIbrick5<-aggregate(PVIbrick, fact=5,fun=mean)
-INDEXtreeagg<-aggregate(INDEXtree, fact=4,fun=mean)
-
-
-######################################################################################################################
-# STEP 4: CLASSIFICATION WITHOUT STRATA ##############################################################################
-######################################################################################################################
-
-## Create 100 random points per crop type
-# peanut = 6; maize = 5; cotton = 1; sorghum = 3; millet = 2
-set.seed(123123)
-crop_types<-unique(trainingareas$Crop_type)
-crop_column_no <- 3
-crop_numbers<-c(6,3,2,5,1)
-samplesize<-100
-trainingportion<-0.8
-randompointsraster<-INDEXtreeagg
-classificationraster<-PVIbrick4
-
-randompoints<-create.train.test(trainingareas,randompointsraster,crop_types,crop_column_no,crop_numbers,samplesize,trainingportion)
-TRAINpoints<-randompoints[[1]]
-TESTpoints<-randompoints[[2]]
-
-## KNN classification without strata
-kvalue<- round.to.first.uneven(length(TRAINpoints[[1]]))
-TRAIN <- data.frame(extract(classificationraster,TRAINpoints),TRAINpoints$Crop)
-TEST <- data.frame(extract(classificationraster,TESTpoints),TESTpoints$Crop)
-TRAINtarget<-TRAIN[,length(TRAIN[1,])]
-TESTtarget<-TEST[,length(TRAIN[1,])]
-
-KNNclassification<-knn(train=TRAIN[,1:length(TRAIN)-1],test=TEST[,1:length(TEST)-1],cl=TRAINtarget,k=kvalue)
-confusionMatrix(KNNclassification,TESTtarget)
+PVIbrick4<-aggregate(PVIbrick, fact=4,fun=mean)
+INDEXtreeagg<-aggregate(INDEXtree, fact=3,fun=mean)
 
 ######################################################################################################################
-# STEP 5: CLASSIFICATION WITH STRATA #################################################################################
+# STEP 4: KNN CLASSIFICATION  ########################################################################################
 ######################################################################################################################
+### Data
+# crop numbers are: peanut = 6; maize = 5; cotton = 1; sorghum = 3; millet = 2
+# soil strata is: spTransform(shapefile('./Input/Sougoumba/Ancillary Data/Soil_Strata.shp'),CRS(projection(trainingareas)))
+# elevation strata is: spTransform(rasterToPolygons(raster('./Input/Sougoumba/Ancillary Data/Sougoumba_height_iso.tif'),dissolve=T),CRS(projection(trainingareas)))
 
-# Random points per strata per crop type
-# peanut = 6; maize = 5; cotton = 1; sorghum = 3; millet = 2
-# strata<-spTransform(shapefile('./Input/Sougoumba/Ancillary Data/Soil_Strata.shp'),CRS(projection(trainingareas)))
-# strata<-spTransform(rasterToPolygons(raster('./Input/Sougoumba/Ancillary Data/Sougoumba_height_iso.tif'),dissolve=T),CRS(projection(trainingareas)))
+### Extra instructions
+# If no strata, fill in 1 for strata
+# It is also possible to build a loop with the knn.with.strata alghorithm in it. The accuracy results of each run
+# are in the table called: accuracy.output. For each strata there ar 5 columns: K-value, overall accuracy, users accuracy,
+# producers accuracy & kappa. The first strata results are in the first 5 columns, second in the next 5, etc.
+
 set.seed(123123)
 remove(accuracy.output)
 crop_types<-unique(trainingareas$Crop)[c(1:3,5)]
 crop_column_no <- 4
-crop_numbers<-c(2,1,3,5)
+crop_numbers<-c(5,2,1,3)
+samplesize<-100
+trainingportion<-0.8
+strata<-spTransform(rasterToPolygons(raster('./Input/Sougoumba/Ancillary Data/Sougoumba_height_iso.tif'),dissolve=T),CRS(projection(trainingareas)))
+randompointsraster<-INDEXtree
+classificationraster<-TSAVIbrick
+return.raster=F
+
+for (i in 1:20){
+  print(paste('Loop:',i))
+  print('')
+  print('')
+  knn.with.strata(trainingareas,strata,randompointsraster,classificationraster,crop_types,crop_column_no,crop_numbers,samplesize,trainingportion,return.raster)
+}
+
+######################################################################################################################
+# STEP 5: REGR.TREE CLASSIFICATION  ##################################################################################
+######################################################################################################################
+### Extra instructions
+# Similar function as KNN function. See step 4.
+
+set.seed(111111)
+remove(accuracy.output)
+crop_types<-unique(trainingareas$Crop)[c(1:3,5)]
+crop_column_no <- 4
+crop_numbers<-c(5,2,1,3)
 samplesize<-100
 trainingportion<-0.8
 strata<-spTransform(rasterToPolygons(raster('./Input/Sougoumba/Ancillary Data/Sougoumba_height_iso.tif'),dissolve=T),CRS(projection(trainingareas)))
@@ -170,21 +170,12 @@ randompointsraster<-INDEXtree
 classificationraster<-PVIbrick
 return.raster=F
 
-for (i in 1:100){
-  knn.with.strata(trainingareas,strata,randompointsraster,classificationraster,crop_types,crop_column_no,crop_numbers,samplesize,trainingportion,return.raster)
+for (i in 1:20){
+  print(paste('Loop:',i))
+  print('')
+  print('')
+  regressiontree.with.strata(trainingareas,strata,randompointsraster,classificationraster,crop_types,crop_column_no,crop_numbers,samplesize,trainingportion,return.raster)
 }
-
-writeRaster(knnRaster,'./Output/Classification/sougoumba2014_pviFact4_KNN_4cl.tif')
-
-
-
-
-# # Plot classified raster
-# knnRaster <- as.factor(knnRaster)
-# plot.raster<-levels(knnRaster)[[1]]
-# plot.raster[['Crop']]<- crop_types
-# levels(knnRaster)<-plot.raster
-# levelplot(knnRaster,main=paste("Stratified classification '" ,id,"'",sep=""),col.regions=brewer.pal(length(crop_types),'Set3'),scales=list(draw=T))+layer(sp.polygons(strata,lwd=2,col='gray28'),SpatialPolygonsRescale(layout.north.arrow(type=1),offset = c(258000,1350550),scale=850))
 
 ######################################################################################################################
 # END ################################################################################################################
