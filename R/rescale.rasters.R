@@ -13,9 +13,8 @@ rescale.rasters <- function(rasterlist,outputrasterspaths, rescalefactor){
     # Else rescale raster
     }else{
       print(paste('Rescale and save raster ',i,'/',length(rasterlist),sep=''))
-      emptylist[i]<-calc(rasterlist[[i]], function(x){x/rescalefactor},outputrasterspaths[i])
+      emptylist[i]<-calc(rasterlist[[i]], function(x){x/rescalefactor},filename=outputrasterspaths[i])
     }
   }
   return (emptylist)
 }
-

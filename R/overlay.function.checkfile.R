@@ -13,7 +13,7 @@ overlay.function.checkfile<-function(x, y,funct,outputfolder,filename){
   } else {
     # Else calculate overlay function
     print ('Calculate and save brick to file')
-    indexbrick<-overlay(x,y,funct,filename=paste(outputfolder,filename,sep=''))
+    indexbrick<-overlay(x,y,fun=funct,filename=paste(outputfolder,filename,sep=''))
   }
   return (indexbrick)
 }
