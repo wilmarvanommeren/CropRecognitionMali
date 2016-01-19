@@ -11,16 +11,18 @@ align.rasters <- function(referencerasterpath, inputrasterpaths, outputrasterspa
       # Check if output raster exists and if this raster is properly aligned
       if(file.exists(outputrasterspaths[i])){
         if(class(try(compareRaster(brick(outputrasterspaths[i]),brick(referencerasterpath)),silent=T))!="try-error"){
+          print(paste('Load aligned raster from file ',i,'/',length(inputrasterpaths),sep=''))
           emptylist[i]<-brick(outputrasterspaths[i])
         } 
       }
       # Check if input raster already is aligned and if so add this to the list
       else if (class(try(compareRaster(brick(inputrasterpaths[i]),brick(referencerasterpath)),silent=T))!="try-error"){
+        print(paste('Input raster is already aligned ',i,'/',length(inputrasterpaths),sep=''))
         emptylist[i]<-brick(x=inputrasterpaths[i])
       } 
       # Else align and save raster
       else{
-        print(paste('Align raster ',i,'/',length(inputrasterpaths)))
+        print(paste('Align and save raster ',i,'/',length(inputrasterpaths),sep=''))
         alignedraster <- align_rasters(inputrasterpaths[i],referencerasterpath,outputrasterspaths[i],T,'ALL_CPUS')
         emptylist[i]<-alignedraster
       }

@@ -1,15 +1,18 @@
 ## Calculating vegetation indices that use the soil line
-# rasterlist: list that includes all raster files
-# funct:      function to be used in the overlay loop
-# indexname:  string with the name of the vegetation index
-# fheight:    flight altitude
-# NIR:        NIR rasterband used in the function
-# RED:        RED rasterband used in the function
-# interval:   interval ratio of the values in the RED raster at which the minimum NIR value is calculated
+# rasterlist:   list that includes all raster files
+# funct:        function to be used in the overlay loop
+# indexname:    string with the name of the vegetation index
+# id:           Unique id for dataset
+# NIR:          NIR rasterband used in the function
+# RED:          RED rasterband used in the function
+# interval:     interval ratio of the values in the RED raster at which the minimum NIR value is calculated
+# Outputfolder: Folder in which the calculated rasters should be saved
 
-vegetation.index.type2<-function(rasterlist,funct,indexname,fheight,NIR,RED,interval){
-  if (length(list.files(path='./Output/',pattern=paste(indexname,fheight,'.tif',sep='')))==1){
-    INDEXbrick<-brick(list.files(path='./Output/',pattern=paste(indexname,fheight,'.tif',sep=''),full.names=T))
+vegetation.index.type2<-function(rasterlist,funct,indexname,id,NIR,RED,interval,outputfolder){
+  # If vegetation index exists load it from file
+  if (length(list.files(path=outputfolder,pattern=paste(indexname,id,'.tif',sep='')))==1){
+    print(paste('Load vegetation index (',indexname,') from file',sep=''))
+    INDEXbrick<-brick(list.files(path=outputfolder,pattern=paste(indexname,id,'.tif',sep=''),full.names=T))
   } else {
     # Calculate soil line slope and intercept
     soil_intercept<-list()
@@ -27,25 +30,23 @@ vegetation.index.type2<-function(rasterlist,funct,indexname,fheight,NIR,RED,inte
         print(paste('Extracting minimal NIR values per RED interval. Loop ',i,'/',length(rasterlist), '; Innerloop ', j,'/',length(intervalseq),sep=''))
         minNIR[j]<-try(min(NIRvect[c(which((REDvect>=intervalseq[j])&(REDvect<intervalseq[j+1])))],na.rm=T))
       }
-      
       minNIRlm<-lm(ifelse(is.infinite(minNIR),NA,minNIR)~intervalseq)
       soil_intercept[i]<-minNIRlm$coefficients[1]
       soil_slope[i]<-minNIRlm$coefficients[2]
     }
-    #C = NIR soil ref/red soil ref
-    
-    # INDEX
+    # Calculate the vegetation index for each raster with their unique soil variables
     INDEXlist<-list()
+    print(paste('Calculating the ',indexname, ' for each of the ',length(rasterlist),' rasters, with their unique soil variables.'))
     for(i in 1:length(rasterlist)){
       INDEXraster <- rasterlist[i]
       s<<-as.numeric(soil_slope[i])
       a<<-as.numeric(soil_intercept[i])
-      INDEXlist[i]<-overlay.function(INDEXraster, funct,NIR,RED)
+      INDEXlist[i]<-overlay.function.list(INDEXraster, funct,NIR,RED)
     }
-    print('Creating rasterbrick')
+    print('Creating a rasterbrick from the calculated vegetation indexes')
     INDEXbrick<-brick(INDEXlist)
-    print(paste('Saving rasterbrick to: ./Output/',indexname,fheight,'.tif',sep=''))
-    writeRaster(INDEXbrick, paste('./Output/',indexname,fheight,'.tif',sep=''))
+    print(paste('Saving rasterbrick to: ',outputfolder,indexname,id,'.tif',sep=''))
+    writeRaster(INDEXbrick, paste(outputfolder,indexname,id,'.tif',sep=''))
   }
   return(INDEXbrick)
 }

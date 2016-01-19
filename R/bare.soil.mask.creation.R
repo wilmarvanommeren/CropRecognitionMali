@@ -1,16 +1,20 @@
-## Creating a vegetation mask from the NDVI brick (vegetation=1,bare=NA)
-# funct:          function to be used in the overlay loop
-# NDVIbrick:      brick of NDVI rasters
-# NDVIbare_value: ndvi value at which the pixel is classified as bare soil
+## Creating a vegetation mask from a vegetation brick (vegetation=1,bare=NA)
+# id:           Unique id for dataset
+# rasterbrick:  Vegetation index raster
+# bare_value:   Vegetation index value at which the pixel is classified as bare soil
+# Outputfolder: Folder in which the calculated raster should be saved
 
-bare.soil.mask.creation<-function(fheight,NDVIbrick,NDVIbare_value){
-  if (length(list.files(path='./Output/',pattern=paste('bare',fheight,'.tif',sep='')))==1){
-    bare.soil.mask<-brick(list.files(path='./Output/',pattern=paste('bare',fheight,'.tif',sep=''),full.names=T))
+bare.soil.mask.creation<-function(id,rasterbrick,bare_value,outputfolder){
+  # If bare soil mask exists
+  if (length(list.files(path=outputfolder,pattern=paste('bare',id,'.tif',sep='')))==1){
+    print(paste('Load bare soil mask from file',sep=''))
+    bare.soil.mask<-brick(list.files(path=outputfolder,pattern=paste('bare',id,'.tif',sep=''),full.names=T))
   } else {
-    print(paste('Creating vegetation mask. Bare soil = ndvi <',NDVIbare_value,sep=''))
-    barefunct <- function(x){ifelse(is.na(x),NA,ifelse(x<NDVIbare_value,NA,1))}
-    bare.soil.mask<-calc(NDVIbrick,barefunct)
-    print(paste('Saving mask to: ./Output/bare',fheight,'.tif',sep=''))
-    writeRaster(bare.soil.mask, paste('./Output/bare',fheight,'.tif',sep=''))
+    # Else calculate vegetation mask
+    print(paste('Creating vegetation mask. Bare soil = ',deparse(substitute(rasterbrick)),' <',bare_value,sep=''))
+    barefunct <- function(x){ifelse(is.na(x),NA,ifelse(x<bare_value,NA,1))}
+    bare.soil.mask<-calc(rasterbrick,barefunct)
+    print(paste('Saving mask to: ',outputfolder,'bare',id,'.tif',sep=''))
+    writeRaster(bare.soil.mask, paste(outputfolder,'bare',id,'.tif',sep=''))
   }
 }
