@@ -17,7 +17,7 @@
 # are in the table called: accuracy.output. For each strata there ar 5 columns: K-value, overall accuracy, users accuracy,
 # producers accuracy & kappa. The first strata results are in the first 5 columns, second in the next 5, etc.
 
-regrtree.with.strata<-function(trainingareas,strata,randompointsraster,classificationraster,crop_types,crop_column_no,crop_numbers,samplesize,trainingportion,return.raster){
+regressiontree.with.strata<-function(trainingareas,strata,randompointsraster,classificationraster,crop_types,crop_column_no,crop_numbers,samplesize,trainingportion,return.raster){
   kvaluelist<<-list()
   trainlist<<-list()
   testlist<<-list()
