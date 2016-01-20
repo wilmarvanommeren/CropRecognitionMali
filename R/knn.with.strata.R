@@ -89,6 +89,7 @@ knn.with.strata<-function(trainingareas,strata,randompointsraster,classification
     
     
   }
+
   # Create raster is return.raster = TRUE
   if (return.raster){
     for (j in 1:length(strata)){

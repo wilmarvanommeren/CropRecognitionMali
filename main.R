@@ -104,7 +104,7 @@ full.season.rasters<-bare.soil.mask[[5:6]]
 INDEXbare<-raster::stackApply(x=full.season.rasters,indices=c(1,1),fun=mean,na.rm=F)
 
 # Calculate mean index profiels per training area and per crop type
-trainingareas <- shapefile("./Input/Sougoumba/2015/Ancillary Data/Sougoumba2015ICRISATfields5m2.shp") 
+trainingareas <- shapefile("./Input/Sougoumba/2015/Ancillary Data/Sougoumba2015ICRISATfields5m3.shp") 
 crop_types<-trainingareas$Crop
 
 INDEXprofilelist <- mean.index.profiles(INDEXbare,indexname,id,trainingareas,crop_types,dates,outputfolder)
@@ -116,7 +116,7 @@ treemask <- shapefile('./Input/Sougoumba/2015/Ancillary Data/Sougoumba2015treema
 INDEXtree<-mask(INDEXbare,treemask,inverse=T)
 
 ## Aggregate raster
-PVIbrick4<-aggregate(PVIbrick, fact=4,fun=mean)
+PVIbrick2<-aggregate(PVIbrick, fact=2,fun=mean)
 INDEXtreeagg<-aggregate(INDEXtree, fact=3,fun=mean)
 
 ######################################################################################################################
@@ -132,24 +132,33 @@ INDEXtreeagg<-aggregate(INDEXtree, fact=3,fun=mean)
 # It is also possible to build a loop with the knn.with.strata alghorithm in it. The accuracy results of each run
 # are in the table called: accuracy.output. For each strata there ar 5 columns: K-value, overall accuracy, users accuracy,
 # producers accuracy & kappa. The first strata results are in the first 5 columns, second in the next 5, etc.
-
-set.seed(123123)
-remove(accuracy.output)
-crop_types<-unique(trainingareas$Crop)[c(1:3,5)]
-crop_column_no <- 4
-crop_numbers<-c(5,2,1,3)
-samplesize<-100
-trainingportion<-0.8
-strata<-spTransform(rasterToPolygons(raster('./Input/Sougoumba/Ancillary Data/Sougoumba_height_iso.tif'),dissolve=T),CRS(projection(trainingareas)))
-randompointsraster<-INDEXtree
-classificationraster<-TSAVIbrick
-return.raster=F
-
-for (i in 1:20){
-  print(paste('Loop:',i))
-  print('')
-  print('')
-  knn.with.strata(trainingareas,strata,randompointsraster,classificationraster,crop_types,crop_column_no,crop_numbers,samplesize,trainingportion,return.raster)
+source('./R/knn.with.strata.R')
+classificationrasterlist<-list(PVIbrick,PVIbrick2,PVIbrick3,PVIbrick4,NDVIbrick,WDVIbrick,SAVIbrick,TSAVIbrick)
+names(classificationrasterlist)<-c('PVIbrick','PVIbrick2','PVIbrick3','PVIbrick4','NDVIbrick','WDVIbrick','SAVIbrick','TSAVIbrick')
+stratalist<-list(spTransform(rasterToPolygons(raster('./Input/Sougoumba/Ancillary Data/Sougoumba_height_iso.tif'),dissolve=T),CRS(projection(trainingareas))),spTransform(shapefile('./Input/Sougoumba/Ancillary Data/Soil_Strata.shp'),CRS(projection(trainingareas))))
+names(stratalist)<-c('height','Soil')
+for (n in 1:length(stratalist)){
+  strata<- stratalist[[n]]
+  for (l in 1:length(classificationrasterlist)){
+    set.seed(123123)
+    remove(accuracy.output)
+    crop_types<-unique(trainingareas$Crop)[c(1:3,5)]
+    crop_column_no <- 4
+    crop_numbers<-c(5,2,1,3)
+    samplesize<-100
+    trainingportion<-0.8
+    randompointsraster<-INDEXtree
+    classificationraster<-classificationrasterlist[[l]]
+    return.raster=F
+    
+    for (m in 1:20){
+      print(paste('Loop:',m))
+      print('')
+      print('')
+      knn.with.strata(trainingareas,strata,randompointsraster,classificationraster,crop_types,crop_column_no,crop_numbers,samplesize,trainingportion,return.raster)
+    }
+    write.csv(accuracy.output,paste('knn',names(classificationrasterlist[l]),names(strata)[n],'.csv'),row.names = F,col.names = F)
+  }
 }
 
 ######################################################################################################################
@@ -158,24 +167,44 @@ for (i in 1:20){
 ### Extra instructions
 # Similar function as KNN function. See step 4.
 
-set.seed(111111)
-remove(accuracy.output)
+source('./R/regressiontree.with.strata.R')
+
+for (n in 1:length(stratalist)){
+  strata<- stratalist[[n]]
+  for (l in 1:length(classificationrasterlist)){
+    set.seed(123123)
+    remove(accuracy.output)
+    crop_types<-unique(trainingareas$Crop)[c(1:3,5)]
+    crop_column_no <- 4
+    crop_numbers<-c(5,2,1,3)
+    samplesize<-100
+    trainingportion<-0.8
+    randompointsraster<-INDEXtree
+    classificationraster<-classificationrasterlist[[l]]
+    return.raster=F
+    
+    for (m in 1:20){
+      print(paste('Loop:',m))
+      print('')
+      print('')
+      regressiontree.with.strata(trainingareas,strata,randompointsraster,classificationraster,crop_types,crop_column_no,crop_numbers,samplesize,trainingportion,return.raster)
+    }
+    write.csv(accuracy.output,paste('regtr',names(classificationrasterlist[l]),names(strata)[n],'.csv'),row.names = F,col.names = F)
+  }
+}
+
+######################################################################################################################
+# STEP 6: MAJORITY FILTER  ###########################################################################################
+######################################################################################################################
+
+maj.raster<-focal(classificationraster,w=matrix(c(1,1,1,1,1,1,1,1,1),nrow=3),fun=modal)
+
 crop_types<-unique(trainingareas$Crop)[c(1:3,5)]
 crop_column_no <- 4
 crop_numbers<-c(5,2,1,3)
-samplesize<-100
-trainingportion<-0.8
-strata<-spTransform(rasterToPolygons(raster('./Input/Sougoumba/Ancillary Data/Sougoumba_height_iso.tif'),dissolve=T),CRS(projection(trainingareas)))
-randompointsraster<-INDEXtree
-classificationraster<-PVIbrick
-return.raster=F
-
-for (i in 1:20){
-  print(paste('Loop:',i))
-  print('')
-  print('')
-  regressiontree.with.strata(trainingareas,strata,randompointsraster,classificationraster,crop_types,crop_column_no,crop_numbers,samplesize,trainingportion,return.raster)
-}
+accuracypoints<-create.random.points (trainingareas,INDEXtree,crop_types,crop_column_no,crop_numbers,1000)
+class.result<-extract(maj.raster,accuracypoints)
+class.target<-overlay(accuracypoints,trainingareas)
 
 ######################################################################################################################
 # END ################################################################################################################

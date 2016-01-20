@@ -90,6 +90,7 @@ regressiontree.with.strata<-function(trainingareas,strata,randompointsraster,cla
     accuracy.output[rowno,(i*5-5)+4]<<-kappa
     accuracy.output[rowno,(i*5-5)+5]<<-prod
   }
+
   # Create raster is return.raster = TRUE
   if (return.raster){
     for (j in 1:length(strata)){
