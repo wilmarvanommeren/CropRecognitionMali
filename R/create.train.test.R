@@ -9,12 +9,12 @@
 # trainingportion:    Requestion training size 
 
 create.train.test <- function (trainingareas,randompointsraster,crop_types,crop_column_no,crop_numbers,samplesize,trainingportion){
-  randompointlist<-create.random.points(trainingareas,randompointsraster,crop_types,crop_column_no,crop_numbers,samplesize)
+  randompointlist<<-create.random.points(trainingareas,randompointsraster,crop_types,crop_column_no,crop_numbers,samplesize)
   trainlist<-list()
   testlist<-list()
   for (i in 1:length(randompointlist)){
     print(paste('Splitting the random points in a test and training dataset [',i,'/',length(randompointlist),']',sep=''))
-    trainset<-sample(seq(1,samplesize,1),trainingportion*samplesize)
+    trainset<-sample(seq(1,length(randompointlist[[i]]),1),trainingportion*length(randompointlist[[i]]))
     testlist[i]<-randompointlist[[i]][-trainset,]
     trainlist[i]<-randompointlist[[i]][trainset,]
   }
@@ -22,3 +22,4 @@ create.train.test <- function (trainingareas,randompointsraster,crop_types,crop_
   TESTpoints<-do.call(rbind,testlist)
   return(c(TRAINpoints,TESTpoints))
 }
+

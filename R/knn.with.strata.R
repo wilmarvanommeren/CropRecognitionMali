@@ -29,7 +29,11 @@ knn.with.strata<-function(trainingareas,strata,randompointsraster,classification
   for (i in 1:length(strata)){
     print (paste('Step1: Calculating accuracy for strata: ',i,'/',length(strata),sep=''))
     # Create points per strata per crop type
-    trainingstrata<-intersect(trainingareas,subset(strata,get(names(strata))==i))
+    if (length(strata)==1){
+      trainingstrata<-intersect(trainingareas,strata)
+    } else {
+      trainingstrata<-intersect(trainingareas,subset(strata,get(names(strata))==i))
+    }
     randompoints<<-create.train.test(trainingstrata,randompointsraster,crop_types,crop_column_no,crop_numbers,samplesize,trainingportion)
     TRAINpoints<<-randompoints[[1]]
     TESTpoints<<-randompoints[[2]]
@@ -96,7 +100,10 @@ knn.with.strata<-function(trainingareas,strata,randompointsraster,classification
       print (paste('Step 2: Classifying strata: ',i,'/',length(strata),sep=''))
       # Create raster mask per strata
       print(paste('Splitting index raster into different strata. Loop: ',j,'/',length(strata),sep=''))
-      masklist<-mask(classificationraster,subset(strata,get(names(strata))==j))
+      if(length(strata)==1){
+        masklist=classificationraster
+        }else{
+          masklist<-mask(classificationraster,subset(strata,get(names(strata))==j))}
       
       # Convert raster to dataframe
       print(paste('Transforming strata to dataframe for calculations. Loop: ',j,'/',length(strata),sep=''))

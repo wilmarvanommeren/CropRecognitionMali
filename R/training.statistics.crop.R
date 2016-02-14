@@ -11,7 +11,7 @@ training.statistics.crop <- function(fieldstatistics){
   # Create matrix to save the values of the calculation
   matrix <- matrix(ncol=length(uniquecrop),nrow=length(rownames(fieldstatistics)))
   for (i in 1:length(uniquecrop)){
-    print(paste('Calculate temporal profiles per crop'))
+    print(paste('Calculate  profiles per crop'))
     # Extract mean values per crop, per raster
     crop <- uniquecrop[i]
     if (length(which(colnames(fieldstatistics)==crop )) >=2){

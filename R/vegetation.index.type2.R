@@ -39,8 +39,8 @@ vegetation.index.type2<-function(rasterlist,funct,indexname,id,NIR,RED,interval,
     print(paste('Calculating the ',indexname, ' for each of the ',length(rasterlist),' rasters, with their unique soil variables.'))
     for(i in 1:length(rasterlist)){
       INDEXraster <- rasterlist[i]
-      s<<-as.numeric(soil_slope[i])
-      a<<-as.numeric(soil_intercept[i])
+      s<-as.numeric(soil_slope[i])
+      a<-as.numeric(soil_intercept[i])
       INDEXlist[i]<-overlay.function.list(INDEXraster, funct,NIR,RED)
     }
     print('Creating a rasterbrick from the calculated vegetation indexes')
