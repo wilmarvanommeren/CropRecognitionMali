@@ -81,9 +81,9 @@ regressiontree.with.strata<-function(trainingareas,strata,randompointsraster,cla
     user<-mean(unlist(user.acc))
     prod<-mean(unlist(prod.acc))
     
-    print(paste('Overal Accuracy:',round(overall,2)))
-    print(paste('Users Accuracy:',round(user,2)))
-    print(paste('Producers Accuracy:',round(prod,2)))
+    print(paste('Overall Accuracy:',round(overall,2)))
+    print(paste('Average user Accuracy:',round(user,2)))
+    print(paste('Average producer Accuracy:',round(prod,2)))
     print(paste('Kappa:',round(kappa,2)))
     print('')
     
@@ -91,8 +91,8 @@ regressiontree.with.strata<-function(trainingareas,strata,randompointsraster,cla
     accuracy.output[rowno,(i*5-5)+1]<<-kvalue
     accuracy.output[rowno,(i*5-5)+2]<<-overall
     accuracy.output[rowno,(i*5-5)+3]<<-user
-    accuracy.output[rowno,(i*5-5)+4]<<-kappa
-    accuracy.output[rowno,(i*5-5)+5]<<-prod
+    accuracy.output[rowno,(i*5-5)+4]<<-prod
+    accuracy.output[rowno,(i*5-5)+5]<<-kappa
   }
 
   # Create raster is return.raster = TRUE
