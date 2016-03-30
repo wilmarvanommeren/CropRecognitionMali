@@ -103,11 +103,11 @@ full.season.rasters<-bare.soil.mask[[5:6]]
 INDEXbare<-raster::stackApply(x=full.season.rasters,indices=c(1,1),fun=mean,na.rm=F)
 
 ## Remove trees
-treemask <- shapefile('./Input/Sougoumba/2015/Ancillary Data/Sougoumba2015treemask5m.shp')
+treemask <- shapefile('./Input/Sougoumba/2015/Ancillary Data/mask_tree2015_5m.shp')
 INDEXtree<-mask(INDEXbare,treemask,inverse=T)
 
 ## Load trainingareas
-trainingareas <- shapefile("./Input/Sougoumba/2015/Ancillary Data/Sougoumba2015ICRISATfields10m.shp")
+trainingareas <- shapefile("./Input/Sougoumba/2015/Ancillary Data/training_fields2015_10m.shp")
 
 ## Calculate mean and quartile spectral or temporal index profiles per training area and per crop type
 samankobare<-overlay(PVIbrick,INDEXtree,fun=function(x,y){x*y})
@@ -116,7 +116,7 @@ crop_types<-trainingareas$Crop
 crop_column_no<-2
 INDEXprofilelist <- mean.index.profiles(samankobare,'Temporal',id,trainingareas,crop_types,rownames,outputfolder)
 quantiles<-calculate.mean.quantiles(samankobare, trainingareas,unique(trainingareas$Crop),crop_column_no)
-write.csv(quantiles,'quantilesspectralSougoumba2015.csv')
+write.csv(quantiles,'./Output/quantilesspectralSougoumba2015.csv')
 
 ## Aggregate raster
 PVIbrick2<-aggregate(PVIbrick, fact=2,fun=mean)
@@ -137,9 +137,9 @@ PVIbrick4<-aggregate(PVIbrick, fact=4,fun=mean)
 # are in the table called: accuracy.output. For each strata there ar 5 columns: K-value, overall accuracy, users accuracy,
 # producers accuracy & kappa. The first strata results are in the first 5 columns, second in the next 5, etc.
 
-classificationrasterlist<-list(PVIbrick,PVIbrick2,PVIbrick3,PVIbrick4)
-names(classificationrasterlist)<-c('PVIbrick','PVIbrick2','PVIbrick3','PVIbrick4')
-stratalist<-list(spTransform(shapefile('./Input/Sougoumba/2015/Ancillary Data/Buildup_Strata2015.shp'),CRS(projection(trainingareas))),spTransform(rasterToPolygons(raster('./Input/Sougoumba/2015/Ancillary Data/Sougoumba2015_height_iso.tif'),dissolve=T),CRS(projection(trainingareas))),spTransform(shapefile('./Input/Sougoumba/2015/Ancillary Data/Soil_Strata2015.shp'),CRS(projection(PVIbrick_cl5))))
+classificationrasterlist<-list(PVIbrick)
+names(classificationrasterlist)<-c('PVIbrick')
+stratalist<-list(spTransform(shapefile('./Input/Sougoumba/2015/Ancillary Data/strata_buildup2015.shp'),CRS(projection(PVIbrick))),spTransform(rasterToPolygons(raster('./Input/Sougoumba/2015/Ancillary Data/strata_elevation2015.tif'),dissolve=T),CRS(projection(PVIbrick))),spTransform(shapefile('./Input/Sougoumba/2015/Ancillary Data/strata_soil2015.shp'),CRS(projection(PVIbrick))))
 names(stratalist)<-c('Buildup','Elevation','Soil')
 
 classrasterlist<-list()
@@ -163,7 +163,7 @@ for (n in 1:1){
       print('')
       classrasterlist[m]<-knn.with.strata(trainingareas,strata,randompointsraster,classificationraster,crop_types,crop_column_no,crop_numbers,samplesize,trainingportion,return.raster)
     }
-    write.csv(accuracy.output,paste('knn',names(classificationrasterlist[l]),names(stratalist)[n],length(crop_types),'crops',id,'.csv',sep=''),row.names = F,col.names = F)
+    write.csv(accuracy.output,paste('./Output/knn',names(classificationrasterlist[l]),names(stratalist)[n],'_',id,'.csv',sep=''),row.names = F,col.names = F)
   }
 }
 
@@ -194,7 +194,7 @@ for (n in 1:length(stratalist)){
       print('')
       regressiontree.with.strata(trainingareas,strata,randompointsraster,classificationraster,crop_types,crop_column_no,crop_numbers,samplesize,trainingportion,return.raster)
     }
-    write.csv(accuracy.output,paste('regtr',names(classificationrasterlist[l]),names(stratalist)[n],length(crop_types),'crops',id,'.csv',sep=''),row.names = F,col.names = F)
+    write.csv(accuracy.output,paste('./Output/regtr',names(classificationrasterlist[l]),names(stratalist)[n],'_',id,'.csv',sep=''),row.names = F,col.names = F)
   }
 }
 
@@ -214,10 +214,6 @@ library(ggplot2)
 library(devtools)
 library(digest)
 library(extrafont)
-
-
-trainingareas <- shapefile("./Input/Sougoumba/2014/Ancillary Data/Sougoumba2014fields10m.shp")
-
 
 # Extract values per crop type
 crop_column_no<-2
@@ -242,6 +238,13 @@ cbind.fill <- function(...){
     rbind(x, matrix(, n-nrow(x), ncol(x))))) 
 }
 
+# print mean and sd per crop class
+crop_bands<-data.frame(cbind.fill(sorgdf,cotdf,mildf,mazdf,pendf))
+sd_crop<-apply(crop_bands,2,function(x) sd(na.omit(x)))
+mean_crop<-apply(crop_bands,2,function(x) mean(na.omit(x)))
+data.frame(sd_crop,mean_crop)
+
+# Merge crop pixel values per crop class
 crop_bands<-data.frame(cbind.fill(sorgdf[,c(1,5)],cotdf[,c(1,5)],mildf[,c(1,5)],mazdf[,c(1,5)],pendf[,c(1,5)]))
 
 # Plot results in feature space plot with 95% confidence ellipse
