@@ -97,7 +97,7 @@ WDVIbrick<-vegetation.index.type2(trimmedlist,WDVI,'wdvi',id,NIR,RED,interval,ou
 NDVIbare_value <- 0.2
 bare.soil.mask <-bare.soil.mask.creation(id,NDVIbrick,NDVIbare_value,outputfolder)
 
-## Remove bare from index (2015=8,2015=5:6)
+## Remove bare from index (2014=8,2015=5:6)
 outputfolder<-'./Output/'
 full.season.rasters<-bare.soil.mask[[5:6]]
 INDEXbare<-raster::stackApply(x=full.season.rasters,indices=c(1,1),fun=mean,na.rm=F)
@@ -143,19 +143,19 @@ stratalist<-list(spTransform(shapefile('./Input/Sougoumba/2015/Ancillary Data/st
 names(stratalist)<-c('Buildup','Elevation','Soil')
 
 classrasterlist<-list()
-for (n in 1:1){
-  strata<- stratalist[[3]]
+for (n in 1:length(stratalist)){
+  strata<- stratalist[[n]]
   for (l in 1:length(classificationrasterlist)){
     set.seed(123123)
     remove(accuracy.output)
-    crop_types<-unique(trainingareas$Crop)
+    crop_types<-unique(trainingareas$Crop)[c(1:4,7)]
     crop_column_no <- 2
-    crop_numbers<-c(4,3,2,5,1)
+    crop_numbers<-c(3,2,1,4,5)
     samplesize<-100
     trainingportion<-0.8
     randompointsraster<-INDEXtree
     classificationraster<-classificationrasterlist[[l]]
-    return.raster=T
+    return.raster=F
     
     for (m in 1:5){
       print(paste('Loop:',m))
